@@ -42,7 +42,7 @@ Backup_Dev=/dev/nvme0n2
 Backup_Dir=/mnt/backup/
 
 #Space Required to Make a Full backup (assume 5GB here)
-Full_Backup_Size=30000000
+Full_Backup_Size=5000000
 
 #Mount command
 mount $Backup_Dev $Backup_Dir
