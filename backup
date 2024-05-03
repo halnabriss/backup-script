@@ -1,0 +1,108 @@
+#!/bin/bash
+# This script is used to make a Full backup one day per week and incremental
+#backups through the other days
+#The script is created by Hadi Alnabriss (alnabris@gmail.com)
+#you can freely use, modify and redistribute.
+
+
+which tar
+if [ $? -ne 0 ]
+then
+echo "$(date) tar is not installed, install it please......" >> /var/log/backup_script;
+fi
+
+which gzip
+if [ $? -ne 0 ]
+then
+echo "$(date) gzip is not installed, install it please......" >> /var/log/backup_script;
+fi
+
+
+#Backup Data: Select here all the folders that you need to backup
+Backup_Data=" /var/www/ /etc/httpd/conf.d/"
+
+#Full Backup Day of Week
+#Everyday the script makes an incremental backup, but only in this day of
+#week the script is going to make a full backup  select (0..6); 0 is Sunday
+Full_Backup_Day=0
+
+
+if  [ $Full_Backup_Day -gt 6 ] || [  $Full_Backup_Day -lt 0 ]
+then
+        echo "$(date) You should select day of week number from 0 to 6 , 0 for Sunday and 6 for Saturday" >> /var/log/backup_script;
+        exit 10
+fi
+
+#Backup Device : This is the device that will be mounted for backup purposes
+#You can use an external HD or shared directory, etc.
+Backup_Dev=/dev/nvme0n2
+
+#Backup Directory : This is the mountpoint where the script is going to make
+#The backup
+Backup_Dir=/mnt/backup/
+
+#Space Required to Make a Full backup (assume 5GB here)
+Full_Backup_Size=30000000
+
+#Mount command
+mount $Backup_Dev $Backup_Dir
+res=$?
+
+if [ $res -ne 0 ] && [ $res -ne 32 ]
+then
+        echo "$(date) Backup script couldn't mount your device" >> /var/log/backup_script;
+        exit 9
+
+fi
+
+#echo "mounted successfully"
+
+#Space Required to make an incremental backup (This should be less than
+#The space required for Full backup (Assume 1GB)
+Inc_Backup_Size=1000000
+
+if [ $Inc_Backup_Size -gt $Full_Backup_Size ]
+then
+echo "$(date) Incremental Backup size is usually less than Full backup size, consider fixing these values" >> /var/log/backup_script;
+fi
+
+
+Available_Size_for_backup=$(df |grep $Backup_Dev |awk '{ print $4 }')
+
+Day_of_week=$(date +%w)
+
+if [ $Day_of_week -eq $Full_Backup_Day ]
+then
+#Here we are going to make a full backup, so we only need to delete the meta file
+
+
+if [ $Full_Backup_Size -gt $Available_Size_for_backup ]
+then
+
+        echo "$(date) No enogh space for full backup, please remove old backups" >> /var/log/backup_script;
+        exit 8
+fi
+
+rm -f $Backup_Dir/data.snap
+
+fi
+
+
+if [ $Inc_Backup_Size -gt $Available_Size_for_backup ]
+then
+
+        echo "$(date) No enogh space for Incremental backup, please remove old backups" >> /var/log/backup_script;
+        exit 7
+fi
+
+#Use date to create new backup dir
+New_Backup_Dir=$(date +%Y-%m-%d-%H-%M)
+mkdir $Backup_Dir/$New_Backup_Dir
+#start Backup
+echo "$(date) Starting Backup......" >> /var/log/backup_script;
+touch $Backup_Dir/$New_Backup_Dir/starting_backup
+tar -zcvg $Backup_Dir/data.snap -f $Backup_Dir/$New_Backup_Dir/data.tar $Backup_Data
+touch $Backup_Dir/$New_Backup_Dir/ending_backup
+echo "$(date) Backup Created Successfully......" >> /var/log/backup_script
+
+umount -l $Backup_Dir
